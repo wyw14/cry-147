@@ -38,6 +38,12 @@ func (admission *Admission) Open(ctx context.Context, handshake Handshake) (*Lea
 	}
 	lease := &Lease{id: uuid.NewString(), admission: admission}
 	if err := handshake(ctx); err != nil {
+		// The slot token was already acquired but the handshake failed, so the
+		// caller will never receive a lease to Close. Release the token here to
+		// avoid leaking admission slots on repeated offline-handshake failures,
+		// which otherwise pin every slot in a "used" state with zero active
+		// sessions and stall the tray in "opening".
+		<-admission.tokens
 		return nil, fmt.Errorf("cycler handshake: %w", err)
 	}
 	admission.mu.Lock()
