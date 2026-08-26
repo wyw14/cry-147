@@ -55,10 +55,14 @@ func (registry *Registry) Replace(tray *model.Tray) error {
 	for _, listener := range registry.listeners {
 		listeners = append(listeners, listener)
 	}
+	registry.mu.Unlock()
+	// Notify listeners outside the write lock: subscribers (e.g. the alarm
+	// observer) may re-enter the registry via Lookup, which acquires the read
+	// lock. Running callbacks while holding the write lock deadlocked the
+	// request because sync.RWMutex is not reentrant.
 	for _, listener := range listeners {
 		listener(*snapshot.Clone())
 	}
-	registry.mu.Unlock()
 	return nil
 }
 
