@@ -19,6 +19,13 @@ type commandHeap []commandItem
 
 func (items commandHeap) Len() int { return len(items) }
 func (items commandHeap) Less(i int, j int) bool {
+	// Higher priority commands (e.g. protective stops) must overtake the
+	// backlog of routine current/voltage tweaks that were enqueued before the
+	// isolation latch. Compare by priority first, then fall back to FIFO order
+	// so commands of equal priority are dispatched in the order they arrived.
+	if items[i].command.Priority != items[j].command.Priority {
+		return items[i].command.Priority > items[j].command.Priority
+	}
 	return items[i].order < items[j].order
 }
 func (items commandHeap) Swap(i int, j int) { items[i], items[j] = items[j], items[i] }
