@@ -24,7 +24,14 @@ func NewStream(reader io.Reader, maxFrame int) *Stream {
 
 func (stream *Stream) ReadFrame() ([]byte, error) {
 	header := make([]byte, 4)
-	if _, err := stream.reader.Read(header); err != nil {
+	// Use io.ReadFull instead of Read: a single Read may return fewer bytes
+	// than requested when the underlying TCP stream delivers a frame split
+	// across small packets. Treating a short read as a complete header/payload
+	// desynchronizes the stream, producing bogus frame sizes and decoded
+	// channel numbers that run into the tens of thousands. io.ReadFull keeps
+	// reading until the buffer is full or EOF, so a frame can never be
+	// reassembled from a partial read.
+	if _, err := io.ReadFull(stream.reader, header); err != nil {
 		if errors.Is(err, io.EOF) {
 			return nil, io.EOF
 		}
@@ -35,7 +42,7 @@ func (stream *Stream) ReadFrame() ([]byte, error) {
 		return nil, fmt.Errorf("frame size %d outside allowed range", size)
 	}
 	payload := make([]byte, size)
-	if _, err := stream.reader.Read(payload); err != nil {
+	if _, err := io.ReadFull(stream.reader, payload); err != nil {
 		return nil, fmt.Errorf("%w: payload: %v", ErrTruncatedFrame, err)
 	}
 	return payload, nil
