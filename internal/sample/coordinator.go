@@ -78,19 +78,17 @@ func (coordinator *Coordinator) PublishPooled(input model.Sample) error {
 	pooled.Payload = model.CloneBytes(input.Payload)
 	subscribers := coordinator.subscriberList()
 	var group sync.WaitGroup
-	start := make(chan struct{})
 	for _, subscriber := range subscribers {
+		copySample := pooled.Clone()
 		group.Add(1)
-		go func(handler Subscriber) {
+		go func(handler Subscriber, value *model.Sample) {
 			defer group.Done()
-			<-start
-			_ = handler(pooled)
-		}(subscriber)
+			_ = handler(value)
+		}(subscriber, copySample)
 	}
+	group.Wait()
 	*pooled = model.Sample{}
 	coordinator.pool.Put(pooled)
-	close(start)
-	group.Wait()
 	return nil
 }
 
